@@ -260,6 +260,18 @@ int led_classdev_register(struct device *parent, struct led_classdev *led_cdev)
 EXPORT_SYMBOL_GPL(led_classdev_register);
 
 /**
+ * led_brightness_set - set LED brightness
+ * @led_cdev: the LED to set
+ * @brightness: the brightness to set it to
+ *
+ * Set an LED's brightness, and, if necessary, cancel the
+ * software blink timer that implements blinking when the
+ * hardware doesn't.
+ */
+extern void led_brightness_set(struct led_classdev *led_cdev,
+			       enum led_brightness brightness);
+
+/**
  * led_classdev_unregister - unregisters a object of led_properties class.
  * @led_cdev: the led device to unregister
  *
@@ -302,14 +314,6 @@ void led_blink_set(struct led_classdev *led_cdev,
 	led_set_software_blink(led_cdev, *delay_on, *delay_off);
 }
 EXPORT_SYMBOL(led_blink_set);
-
-void led_brightness_set(struct led_classdev *led_cdev,
-			enum led_brightness brightness)
-{
-	led_stop_software_blink(led_cdev);
-	led_cdev->brightness_set(led_cdev, brightness);
-}
-EXPORT_SYMBOL(led_brightness_set);
 
 static int __init leds_init(void)
 {

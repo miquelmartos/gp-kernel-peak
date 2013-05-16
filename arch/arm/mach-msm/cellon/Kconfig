@@ -1,0 +1,66 @@
+config MACH_MSM8225
+	bool
+
+menu "Cellon Board Selection"
+
+config MACH_MSM8225_C8680
+	depends on ARCH_MSM7X27A
+	depends on ARCH_MSM8625
+	depends on !MSM_STACKED_MEMORY
+	select MACH_MSM8225
+	default n
+	bool "CELLON C8680 Board - Geeksphone Peak/twist"
+	help
+	 Support for the Cellon C8680 board.
+
+config MACH_MSM8225_C8681
+	depends on ARCH_MSM7X27A
+	depends on !MSM_STACKED_MEMORY
+	select MACH_MSM8225
+	default n
+	bool "CELLON C8681 Board"
+	help
+	 Support for the Cellon C8681 board.
+
+endmenu
+
+menu "Cellon C8680 Board drivers"
+
+config ENABLE_CELLON_C8680_CAMERA
+	depends on MACH_MSM8225_C8680
+	select MSM_CAMERA
+	select S5K3H2Y
+	select S5K3H2Y_SUNNY
+	select OV2675
+	select MSM_CAMERA_FLASH
+	select MSM_CAMERA_SENSOR
+	select MSM_ACTUATOR
+	select QUP_EXCLUSIVE_TO_CAMERA
+	select MSM_CAMERA_V4L2
+	default y
+	bool "Enable CELLON C8680 Camera"
+	help
+	 Enable CELLON C8680 Camera.
+
+config ENABLE_CELLON_C8680_SENSORS
+	depends on MACH_MSM8225_C8680
+	default y
+	bool "Enable CELLON C8680 Sensors"
+	help
+	 Enable CELLON C8680 Sensors.
+
+config ENABLE_CELLON_C8680_BT
+	depends on MACH_MSM8225_C8680
+	default y
+	bool "Enable CELLON C8680 Bluetooth"
+	help
+	 Enable CELLON C8680 Bluetooth.
+
+config ENABLE_CELLON_C8680_WLAN
+	depends on MACH_MSM8225_C8680
+	default y
+	bool "Enable CELLON C8680 Wlan"
+	help
+	 Enable CELLON C8680 Wlan.
+
+endmenu

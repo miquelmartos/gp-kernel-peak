@@ -421,20 +421,6 @@ config MSM_REMOTE_SPINLOCK_SFPB
 config MSM_ADM3
 	bool
 
-choice
-	prompt "Cellon Project Selection"
-
-	default CELLON_PRJ_C8680
-
-	config CELLON_PRJ_C8681
-		bool "C8681"
-		
-	config CELLON_PRJ_C8680
-		bool "C8680"
-		
-endchoice
-		
-
 menu "MSM Board Selection"
 
 config MACH_HALIBUT
@@ -926,6 +912,8 @@ config MACH_FSM9XXX_SURF
 	  FFA board.
 
 endmenu
+
+source "arch/arm/mach-msm/cellon/Kconfig"
 
 config MSM_STACKED_MEMORY
 	bool "Stacked Memory"

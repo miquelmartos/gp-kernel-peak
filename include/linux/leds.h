@@ -101,17 +101,7 @@ extern void led_classdev_resume(struct led_classdev *led_cdev);
 extern void led_blink_set(struct led_classdev *led_cdev,
 			  unsigned long *delay_on,
 			  unsigned long *delay_off);
-/**
- * led_brightness_set - set LED brightness
- * @led_cdev: the LED to set
- * @brightness: the brightness to set it to
- *
- * Set an LED's brightness, and, if necessary, cancel the
- * software blink timer that implements blinking when the
- * hardware doesn't.
- */
-extern void led_brightness_set(struct led_classdev *led_cdev,
-			       enum led_brightness brightness);
+
 
 /*
  * LED Triggers

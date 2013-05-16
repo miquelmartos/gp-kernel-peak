@@ -180,7 +180,7 @@ static struct device_attribute dev_attr_blink_all = {
 	.store = cpldled_blink_all_store,
 };
 
-static void led_brightness_set(struct led_classdev *led_cdev,
+void led_brightness_set(struct led_classdev *led_cdev,
 			       enum led_brightness brightness)
 {
 	struct CPLD_LED_data *CPLD_LED;
@@ -224,6 +224,7 @@ static void led_brightness_set(struct led_classdev *led_cdev,
 #endif
 	spin_unlock(&CPLD_LED->data_lock);
 }
+EXPORT_SYMBOL(led_brightness_set);
 
 static ssize_t cpldled_grpfreq_show(struct device *dev,
 				    struct device_attribute *attr, char *buf)
