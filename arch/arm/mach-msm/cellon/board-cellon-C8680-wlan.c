@@ -22,14 +22,8 @@
 #include "../devices-msm7x2xa.h"
 #include "../timer.h"
 
-static const char *id = "WLAN";
-static bool wlan_powered_up;
+static const char *id = "WLPW";
 
-enum {
-	WLAN_VREG_S3 = 0,
-	WLAN_VREG_L17,
-	WLAN_VREG_L19
-};
 
 struct wlan_vreg_info {
 	const char *vreg_id;
@@ -46,12 +40,11 @@ static struct wlan_vreg_info vreg_info[] = {
 	{"wlan1v8",     1800000, 1800000, 0, 0, NULL}
 };
 
-
-int gpio_wlan_sys_rest_en = 124;
+int gpio_wlan_sys_rest_en;
 
 static void gpio_wlan_config(void)
 {
-
+        gpio_wlan_sys_rest_en = 124;
 	pr_info("wlan rest gpio - %d\n", gpio_wlan_sys_rest_en);
 }
 
@@ -178,6 +171,13 @@ pin_cnt_fail:
 	if (on)
 		regulator_disable(vreg_info[index].reg);
 reg_disable:
+	while (index) {
+		if (on) {
+			index--;
+			regulator_disable(vreg_info[index].reg);
+			regulator_put(vreg_info[index].reg);
+		}
+	}
 	return rc;
 }
 
@@ -185,11 +185,6 @@ static unsigned int msm_AR600X_setup_power(bool on)
 {
 	int rc = 0;
 	static bool init_done;
-
-	if (wlan_powered_up) {
-		pr_info("WLAN already powered up\n");
-		return 0;
-	}
 
 	if (unlikely(!init_done)) {
 		gpio_wlan_config();
@@ -207,25 +202,22 @@ static unsigned int msm_AR600X_setup_power(bool on)
 		pr_err("%s: wlan_switch_regulators error = %d\n", __func__, rc);
 		goto out;
 	}
-		rc = gpio_request(gpio_wlan_sys_rest_en, "WLAN_DEEP_SLEEP_N");
-		if (rc) {
-			pr_err("%s: WLAN sys_rest_en GPIO %d request failed %d\n",
-				__func__,
-				gpio_wlan_sys_rest_en, rc);
-			goto gpio_fail;
-		}
-		rc = setup_wlan_gpio(on);
-		if (rc) {
-			pr_err("%s: wlan_set_gpio = %d\n", __func__, rc);
-			goto gpio_fail;
-		}
-		gpio_free(gpio_wlan_sys_rest_en);
+
+	/*
+	 * gpio_wlan_sys_rest_en is not from the GPIO expander for QRD7627a,
+	 * EVB1.0 and QRD8625,so the below step is required for those devices.
+	 */
+
+		rc = gpio_tlmm_config(GPIO_CFG(gpio_wlan_sys_rest_en, 0,
+					GPIO_CFG_OUTPUT, GPIO_CFG_NO_PULL,
+					GPIO_CFG_2MA), GPIO_CFG_ENABLE);
+		gpio_set_value(gpio_wlan_sys_rest_en, 1);
 
 	/* Enable the A0 clock */
 	rc = setup_wlan_clock(on);
 	if (rc) {
 		pr_err("%s: setup_wlan_clock = %d\n", __func__, rc);
-		goto gpio_fail;
+		goto set_gpio_fail;
 	}
 
 	/* Configure A0 clock to be slave to WLAN_CLK_PWR_REQ */
@@ -239,28 +231,18 @@ static unsigned int msm_AR600X_setup_power(bool on)
 
 	pr_info("WLAN power-up success\n");
 	return 0;
-
-	pr_info("WLAN power-up success\n");
-	wlan_powered_up = true;
-	return 0;
 set_clock_fail:
 	setup_wlan_clock(0);
-gpio_fail:
-	gpio_free(gpio_wlan_sys_rest_en);
+set_gpio_fail:
+	setup_wlan_gpio(0);
 out:
 	pr_info("WLAN power-up failed\n");
-	wlan_powered_up = false;
 	return rc;
 }
 
 static unsigned int msm_AR600X_shutdown_power(bool on)
 {
 	int rc = 0;
-	
-	if (!wlan_powered_up) {
-		pr_info("WLAN is not powered up, returning success\n");
-		return 0;
-	}
 
 	/* Disable the A0 clock */
 	rc = setup_wlan_clock(on);
@@ -269,16 +251,19 @@ static unsigned int msm_AR600X_shutdown_power(bool on)
 		goto set_clock_fail;
 	}
 
-	rc = gpio_request(gpio_wlan_sys_rest_en, "WLAN_DEEP_SLEEP_N");
-	if (!rc) {
-		rc = setup_wlan_gpio(on);
+	/*
+	 * gpio_wlan_sys_rest_en is not from the GPIO expander for QRD7627a,
+	 * EVB1.0 and QRD8625,so the below step is required for those devices.
+	 */
+		rc = gpio_tlmm_config(GPIO_CFG(gpio_wlan_sys_rest_en, 0,
+					GPIO_CFG_OUTPUT, GPIO_CFG_NO_PULL,
+					GPIO_CFG_2MA), GPIO_CFG_ENABLE);
 		if (rc) {
-			pr_err("%s: setup_wlan_gpio = %d\n",
+			pr_err("%s gpio_tlmm_config 119 failed,error = %d\n",
 				__func__, rc);
 			goto gpio_fail;
 		}
-		gpio_free(gpio_wlan_sys_rest_en);
-	}
+		gpio_set_value(gpio_wlan_sys_rest_en, 0);
 
 	rc = wlan_switch_regulators(on);
 	if (rc) {
@@ -286,7 +271,7 @@ static unsigned int msm_AR600X_shutdown_power(bool on)
 			__func__, rc);
 		goto reg_disable;
 	}
-	wlan_powered_up = false;
+
 	pr_info("WLAN power-down success\n");
 	return 0;
 set_clock_fail:
@@ -342,13 +327,15 @@ static int __init qrd_wlan_init(void)
 
 	pr_info("WLAN power init\n");
 
-	gpio_request(gpio_wlan_sys_rest_en, "WLAN_DEEP_SLEEP_N");
-	rc = setup_wlan_gpio(false);
-	gpio_free(gpio_wlan_sys_rest_en);
-	if (rc) {
-		pr_err("%s: wlan_set_gpio = %d\n", __func__, rc);
-		goto exit;
-	}
+		rc = gpio_tlmm_config(GPIO_CFG(gpio_wlan_sys_rest_en, 0,
+					GPIO_CFG_OUTPUT, GPIO_CFG_NO_PULL,
+					GPIO_CFG_2MA), GPIO_CFG_ENABLE);
+		if (rc) {
+			pr_err("%s gpio_tlmm_config %d failed,error = %d\n",
+				__func__, gpio_wlan_sys_rest_en, rc);
+			goto exit;
+		}
+		gpio_set_value(gpio_wlan_sys_rest_en, 0);
 
     /*ATH6KL_USES_PREALLOCATE_MEM*/
 #ifdef CONFIG_ATH6KL_USES_PREALLOCATE_MEM
