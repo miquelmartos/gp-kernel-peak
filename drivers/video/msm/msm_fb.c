@@ -30,6 +30,7 @@
 #include <mach/board.h>
 #include <linux/uaccess.h>
 #include <mach/iommu_domains.h>
+#include <mach/gpio.h>
 
 #include <linux/workqueue.h>
 #include <linux/string.h>
@@ -1626,6 +1627,9 @@ static int msm_fb_release(struct fb_info *info, int user)
 
 DEFINE_SEMAPHORE(msm_fb_pan_sem);
 
+extern bool kernel_booted;
+#define GPIO_LCD_BACKLIGHT_EN 96
+
 static int msm_fb_pan_display(struct fb_var_screeninfo *var,
 			      struct fb_info *info)
 {
@@ -1718,6 +1722,13 @@ static int msm_fb_pan_display(struct fb_var_screeninfo *var,
 			     (var->activate == FB_ACTIVATE_VBL));
 	mdp_dma_pan_update(info);
 	up(&msm_fb_pan_sem);
+
+	 if (!kernel_booted) {
+		printk("%s: %d\n", __func__, __LINE__);
+		msleep(LCD_INTERNAL_UPDATE_PERIOD);
+		gpio_set_value(GPIO_LCD_BACKLIGHT_EN, 1);
+		kernel_booted = true;
+        }
 
 	down(&lcd_update_sem);
 	if (!lcd_updated) {

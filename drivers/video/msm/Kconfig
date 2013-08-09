@@ -392,12 +392,12 @@ config FB_MSM_MIPI_NT35510_ALASKA_VIDEO_WVGA_PT
 config FB_MSM_MIPI_NT35510_ALASKA_CMD_WVGA_PT
 	bool
 	select FB_MSM_MIPI_DSI_NT35510_ALASKA
-	default y
+	default n
 
 config FB_MSM_MIPI_NT35510_BOE_CMD_WVGA_PT
 	bool
 	select FB_MSM_MIPI_DSI_NT35510_BOE
-	default y
+	default n
 
 config FB_MSM_MIPI_NT35516_VIDEO_QHD_PT
         bool

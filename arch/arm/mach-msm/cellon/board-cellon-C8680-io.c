@@ -28,6 +28,13 @@
 #include "board-cellon-C8680.h"
 #include "../devices-msm7x2xa.h"
 
+#ifdef CONFIG_TOUCHSCREEN_ATMEL_MXT154
+#include <linux/i2c/atmel_mxt_ts.h>
+#include <linux/atmel_maxtouch.h>
+#define ATMEL_TS_I2C_NAME "maXTouch"
+#define ATMEL_X_OFFSET 13
+#define ATMEL_Y_OFFSET 0
+#endif /*atmel*/
 
 #ifdef CONFIG_TOUCHSCREEN_HX8526A
 #include <linux/himax_ts.h>
@@ -84,21 +91,149 @@ static struct platform_device kp_pdev_8625 = {
 #define _hs(_h)  __stringify(_h)
 #define _ps(_p)  __stringify(_p)
 #define _pwhs(_p,_w,_h) _ps(_p)":"_ws(_w)":"_hs(_h)
-/* Synaptics change for beagle board */
+#define MAX_LEN 100
+#define __pwhs _pwhs(1008,100,40)
+#define _ms_ __stringify(55) // 5-105
+#define _hs_ __stringify(200) //150-250
+#define _bs_ __stringify(360) //
+#define _ss_ __stringify(500)
 
-#define MAX_LEN		100
+#ifdef CONFIG_TOUCHSCREEN_ATMEL_MXT154
+#define MXT_GPIO_INT 48
+#define MXT_GPIO_RST 26
 
-#ifdef CONFIG_TOUCHSCREEN_HX8526A
-#define __pwhs  _pwhs(1008,100,40)
-#define _ms_     __stringify(55) // 5-105
-#define _hs_     __stringify(200) //150-250
-#define _bs_     __stringify(360) //
-#define _ss_     __stringify(500)
-static ssize_t himax_virtual_keys_show(struct kobject *kobj,
-		     struct kobj_attribute *attr, char *buf)
+static ssize_t atmel_virtual_keys_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
 
-    char *virtual_keys = __stringify(EV_KEY) ":" __stringify(KEY_MENU)  ":"_ms_":"  __pwhs  \
+    char *virtual_keys = __stringify(EV_KEY) ":" __stringify(KEY_MENU)  ":"_ms_":"  __pwhs \
+                     ":" __stringify(EV_KEY) ":" __stringify(KEY_HOME)  ":"_hs_":" __pwhs \
+                     ":" __stringify(EV_KEY) ":" __stringify(KEY_BACK)  ":"_bs_":" __pwhs \
+                     ":" __stringify(EV_KEY) ":" __stringify(KEY_SEARCH)":"_ss_":" _pwhs(1008,80,40) "\n";
+
+	return snprintf(buf, strnlen(virtual_keys, MAX_LEN) + 1 , "%s",
+			virtual_keys);
+
+}
+
+static struct kobj_attribute atmel_virtual_keys_attr = {
+	.attr = {
+		.name = "virtualkeys.maxtouch-ts154",
+		.mode = S_IRUGO,
+	},
+	.show = &atmel_virtual_keys_show,
+};
+
+
+static struct attribute *atmel_key_properties_attrs[] = {
+	&atmel_virtual_keys_attr.attr,
+	NULL
+};
+
+static struct attribute_group atmel_key_properties_attr_group = {
+	.attrs = atmel_key_properties_attrs,
+};
+
+static int atmel_virtual_key_properties(struct kobject * kobject)
+{
+	int retval = 0;
+
+	if (kobject)
+		retval = sysfs_create_group(kobject,
+				&atmel_key_properties_attr_group);
+	if (retval)
+		pr_err("atmel:failed to create  board_properties\n");
+
+	return retval;
+}
+
+void atmel_gpio_uninit(void)
+{
+    gpio_free(MXT_GPIO_INT) ;
+    gpio_free(MXT_GPIO_RST) ;
+}
+int atmel_gpio_init(void)
+{
+    int ret ;
+
+    ret = gpio_request(MXT_GPIO_RST, "rmi4_rst");
+    if (ret) {
+    pr_err("%s: Failed to get attn gpio %d. Code: %d.",
+           __func__, MXT_GPIO_INT, ret);
+    return ret;
+    }
+
+    ret = gpio_tlmm_config(GPIO_CFG(MXT_GPIO_RST, 0, GPIO_CFG_OUTPUT, GPIO_CFG_PULL_UP,
+    		GPIO_CFG_8MA), GPIO_CFG_ENABLE);
+    if (ret) {
+    pr_err("%s: gpio_tlmm_config for %d failed\n",
+    	__func__, MXT_GPIO_RST);
+    return ret;
+    }
+
+    gpio_set_value(MXT_GPIO_RST, 1);
+
+    ret = gpio_request(MXT_GPIO_INT, "rmi4_attn");
+    if (ret) {
+    pr_err("%s: Failed to get attn gpio %d. Code: %d.",
+           __func__, MXT_GPIO_INT, ret);
+    return ret;
+    }
+
+    ret = gpio_tlmm_config(GPIO_CFG(MXT_GPIO_INT, 0, GPIO_CFG_INPUT, GPIO_CFG_PULL_UP,
+    		GPIO_CFG_8MA), GPIO_CFG_ENABLE);
+    if(ret) {
+    pr_err("%s: gpio_tlmm_config for %d failed\n",
+    	__func__, MXT_GPIO_INT);
+    return ret;
+    }
+
+    gpio_set_value(MXT_GPIO_INT, 1);
+
+  return 0 ;
+}
+
+static int mxt154_key_codes[MXT_KEYARRAY_MAX_KEYS] = {
+	[0] = KEY_HOME,
+	[1] = KEY_MENU,
+	[9] = KEY_BACK,
+	[10] = KEY_SEARCH,
+};
+
+
+static struct mxt_platform_data mxt154_platform_data = {
+	//.config_array		= mxt_config_array,
+	//.config_array_size	= ARRAY_SIZE(mxt_config_array),
+	.panel_minx		= 0,
+	.panel_maxx		= 540,
+	.panel_miny		= 0,
+	.panel_maxy		= 1023,
+	.disp_minx		= 0,
+	.disp_maxx		= 540,
+	.disp_miny		= 0,
+	.disp_maxy		= 960,
+	.gpio_rst		= MXT_GPIO_RST,
+	.gpio_irq		= MXT_GPIO_INT,
+	.gpio_init      = atmel_gpio_init,
+	.gpio_uninit    = atmel_gpio_uninit,
+	.key_codes		= mxt154_key_codes,
+};
+
+static struct i2c_board_info atmel_ts_devices_info[] __initdata = {
+	{
+		I2C_BOARD_INFO(ATMEL_MXT154_NAME, 0x4b),
+		.platform_data = &mxt154_platform_data,
+		.irq = MSM_GPIO_TO_INT(MXT_GPIO_INT),
+	},
+};
+
+#endif /*atmel*/
+
+#ifdef CONFIG_TOUCHSCREEN_HX8526A
+
+static ssize_t himax_virtual_keys_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+{
+
+    char *virtual_keys = __stringify(EV_KEY) ":" __stringify(KEY_MENU)  ":"_ms_":"  __pwhs \
                      ":" __stringify(EV_KEY) ":" __stringify(KEY_HOME)  ":"_hs_":" __pwhs \
                      ":" __stringify(EV_KEY) ":" __stringify(KEY_BACK)  ":"_bs_":" __pwhs \
                      ":" __stringify(EV_KEY) ":" __stringify(KEY_SEARCH)":"_ss_":" _pwhs(1008,80,40) "\n";
@@ -234,6 +369,12 @@ int __init register_tp_devices(void)
                     himax_ts_devices_info,
                     ARRAY_SIZE(himax_ts_devices_info));
         himax_virtual_key_properties(kobj);
+#endif
+#if defined(CONFIG_TOUCHSCREEN_ATMEL_MXT154)
+        i2c_register_board_info(MSM_GSBI1_QUP_I2C_BUS_ID,
+                    atmel_ts_devices_info,
+                    ARRAY_SIZE(atmel_ts_devices_info));
+        atmel_virtual_key_properties(kobj);
 #endif
     return 0 ;
 }
